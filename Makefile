@@ -46,11 +46,11 @@ $(BUILD_DIR):
 
 test: all
 	$(CXX) test.cpp $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) -o $(BUILD_DIR)/test
-	$(BUILD_DIR)/test
+	-$(BUILD_DIR)/test
 
 test_installed:
 	$(CXX) test.cpp $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
-	$(BUILD_DIR)/test
+	-$(BUILD_DIR)/test
 
 install:
 	$(CP) $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)

@@ -22,10 +22,13 @@ namespace Arguments
 {
 
 Option::Option(const char* name, const char* description, OPTTYPE type)
-	: m_name(name), m_short_name(nullptr), m_description(description), m_type(type), m_found(false) {}
+	: m_name(name), m_short_name(0), m_description(description), m_type(type), m_found(false) {}
 
-Option::Option(const char* name, const char* short_name, const char* description, OPTTYPE type)
+Option::Option(const char* name, const char short_name, const char* description, OPTTYPE type)
 	: m_name(name), m_short_name(short_name), m_description(description), m_type(type), m_found(false) {}
+
+Option::Option(const char short_name, const char* description, OPTTYPE type)
+	: m_name(nullptr), m_short_name(short_name), m_description(description), m_type(type), m_found(false) {}
 
 bool Option::found()
 {
@@ -67,119 +70,211 @@ void Parser::add_positional_argument(PositionalArgument* arg)
 
 int Parser::parse(int argc, char ** argv)
 {
-	uint8_t next_pos_arg = 0;
-	bool all_pos_args_found = m_positional_args.size() == 0;
-	for (uint16_t i = 1; i < argc; i++)
+	for (m_opt_index = 1; m_opt_index < argc; m_opt_index++)
 	{
-		if (argv[i][0] == '-') {
-			bool match_found = false;
-			bool use_long_name = argv[i][1] == '-';
-			Option* matched_arg;
-			const char* option_name;
+		if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] == '-') {
 
-			for (Option* arg: m_options)
-			{
-				if ((use_long_name ? strcmp(argv[i] + 2, arg->m_name) : strcmp(argv[i] + 1, arg->m_short_name)) == 0) {
-					arg->m_found = true;
-					match_found = true;
-					option_name = (use_long_name ? arg->m_name : arg->m_short_name);
-					matched_arg = arg;
+			int ret = handle_long_option(argv[m_opt_index] + 2, m_opt_index + 1 < argc ? argv[m_opt_index + 1] : nullptr);
+			if (ret)
+				return ret;
 
+		} else if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] != '-') {
+
+			for (uint8_t i = 1; argv[m_opt_index][i] != 0; i++) {
+				bool last = argv[m_opt_index][i + 1] == 0;
+				int ret = handle_short_option(argv[m_opt_index][i], m_opt_index + 1 < argc && last ? argv[m_opt_index + 1] : nullptr);
+				if (ret)
+					return ret;
+				if (last)
 					break;
-				}
 			}
 
-			if (!match_found) {
-				if (use_long_name && strcmp(argv[i] + 2, "help") == 0) {
-					print_help_message();
-					return 1;
-				}
-				std::cout << m_program_name << ": invalid option: " << argv[i] << std::endl << std::endl;
-				std::cout << "See " << m_program_name << " --help" << std::endl;
-
-				return -1;
-			} else {
-				if (matched_arg->m_type != FLAG) {
-					i++;
-					if (i < argc && argv[i][0] != '-') {
-						if (matched_arg->m_type == STRING) {
-							matched_arg->data = argv[i];
-						} else if (matched_arg->m_type == INT) {
-							int* val = new int;
-							*val = stringToInt(argv[i]);
-							if (*val == -1) {
-								std::cout << m_program_name << ": option '" << option_name << "' expects an integer as an argument, got " << argv[i] << " instead" << std::endl;
-								return -4;
-							}
-							matched_arg->data = val;
-						} else {
-							std::cout << "You appear to have forgotten to add a handler for this type of argument: " << matched_arg->m_type << std::endl;
-						}
-					} else {
-						std::cout << m_program_name << ": Missing argument for option '" << option_name << '\'' << std::endl;
-						return -3;
-					}
-				}
-			}
-		} else if (!all_pos_args_found) {
-			PositionalArgument* arg = m_positional_args[next_pos_arg];
-			if (arg->m_type == INT) {
-				int* val = new int;
-				*val = stringToInt(argv[i]);
-				if (*val == -1) {
-					std::cout << m_program_name << ": argument '" << arg->m_name << "' expects an integer as an argument, got " << argv[i] << " instead" << std::endl;
-					return -4;
-				}
-				arg->data = val;
-			} else {
-				arg->data = argv[i];
-			}
-			arg->m_found = true;
-			next_pos_arg++;
-			all_pos_args_found = m_positional_args.size() <= next_pos_arg;
 		} else {
-			std::cout << m_program_name << ": invalid option '" << argv[i] << '\'' << std::endl << std::endl;
-			std::cout << "See " << m_program_name << " --help" << std::endl;
 
-			return -2;
+			int ret = handle_positional_argument(argv[m_opt_index]);
+			if (ret)
+				return ret;
+
 		}
 	}
 
-	if (!all_pos_args_found) {
-		for (; next_pos_arg < m_positional_args.size(); next_pos_arg++) {
-			if (m_positional_args[next_pos_arg]->m_req) {
-				std::cout << m_program_name << ": Missing required positional argument '" << m_positional_args[next_pos_arg]->m_name << "'" << std::endl << std::endl;
-				std::cout << "See " << m_program_name << " --help" << std::endl;
-
-				return -5;
-			}
+	if (m_pos_index < m_positional_args.size()) {
+		for (; m_pos_index < m_positional_args.size(); m_pos_index++) {
+			if (m_positional_args[m_pos_index]->m_req)
+				return missing_positional_argument(m_positional_args[m_pos_index]->m_name);
 		}
 	}
 
 	return 0;
 }
 
-void Parser::print_help_message()
+int Parser::handle_long_option(const char* option, const char* next_value)
+{
+	Option* matched_option = nullptr;
+
+	for (Option* opt: m_options) {
+		if (strcmp(opt->m_name, option) == 0) {
+			matched_option = opt;
+			break;
+		}
+	}
+
+	if (matched_option == nullptr) {
+
+		if (strcmp("help", option) == 0)
+			return print_help_message();
+
+		return unknown_option(option);
+
+	} else {
+
+		matched_option->m_found = true;
+		return get_option_data(matched_option, next_value);
+
+	}
+
+	std::cout << "Congratulations! You have reached an impossible state" << std::endl << std::endl;
+	std::cout << "Reality is broken :)" << std::endl;
+	return -1;
+}
+
+int Parser::handle_short_option(const char option, const char* next_value)
+{
+	Option* matched_option = nullptr;
+
+	for (Option* opt: m_options) {
+		if (opt->m_short_name == option) {
+			matched_option = opt;
+			break;
+		}
+	}
+
+	if (matched_option == nullptr) {
+
+		if ('h' == option)
+			return print_help_message();
+
+		return unknown_option(option);
+
+	} else {
+
+		matched_option->m_found = true;
+		return get_option_data(matched_option, next_value);
+
+	}
+
+	std::cout << "Congratulations! You have reached impossible state #2" << std::endl << std::endl;
+	std::cout << "Reality is broken :)" << std::endl;
+	return -1;
+}
+
+int Parser::handle_positional_argument(const char* arg)
+{
+	if (m_pos_index >= m_positional_args.size())
+		return unknown_option(arg);
+
+	PositionalArgument* pos_arg = m_positional_args[m_pos_index];
+
+	if (pos_arg->m_type == INT) {
+		int* val = new int;
+		if ((*val = stringToInt(arg)) == -1)
+			return incorrect_type(pos_arg->m_name, arg);
+
+		pos_arg->data = val;
+	} else {
+		pos_arg->data = (void*) arg;
+	}
+
+	pos_arg->m_found = true;
+	m_pos_index++;
+	return 0;
+}
+
+int Parser::get_option_data(Option* opt, const char* data_str)
+{
+	if (opt->m_type == FLAG)
+		return 0;
+
+	if (data_str == nullptr || data_str[0] == '-')
+		return missing_argument(opt->m_name);
+
+	if (opt->m_type == INT) {
+		int* val = new int;
+		if ((*val = stringToInt(data_str)) == -1)
+			return incorrect_type(opt->m_name, data_str);
+		opt->data = val;
+	} else {
+		opt->data = (void*) data_str;
+	}
+
+	m_opt_index++;
+	return 0;
+}
+
+int Parser::unknown_option(const char* option)
+{
+	std::cout << m_program_name << ": invalid option '" << option << '\'' << std::endl << std::endl;
+	std::cout << "See " << m_program_name << " --help" << std::endl;
+
+	return -1;
+}
+
+int Parser::unknown_option(const char option)
+{
+	std::cout << m_program_name << ": invalid option: " << option << std::endl << std::endl;
+	std::cout << "See " << m_program_name << " --help" << std::endl;
+
+	return -1;
+}
+
+int Parser::incorrect_type(const char* option, const char* got)
+{
+	std::cout << m_program_name << ": argument '" << option << "' expects an integer as an argument, got " << got << " instead" << std::endl;
+
+	return -4;
+}
+
+int Arguments::Parser::missing_argument(const char* option)
+{
+	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
+
+	return -3;
+}
+
+int Parser::missing_positional_argument(const char* arg)
+{
+	std::cout << m_program_name << ": Missing required positional argument '" << arg << "'" << std::endl << std::endl;
+	std::cout << "See " << m_program_name << " --help" << std::endl;
+
+	return -5;
+}
+
+int Parser::print_help_message()
 {
 	std::cout << "Usage: " << m_program_name << (m_options.size() > 0 ? " [OPTIONS]" : "");
 	for (PositionalArgument* arg: m_positional_args)
 	{
 		std::cout << " " << arg->m_name;
 	}
-	std::cout << std::endl << std::endl << std::endl;
+	std::cout << std::endl;
 
 
-	std::cout << "Options:" << std::endl;
+	if (m_options.size() > 0)
+		std::cout << std::endl << std::endl << "Options:" << std::endl;
 	for (Option* opt: m_options)
 	{
-		std::cout << "  -";
-		if (opt->m_short_name != nullptr)
-			std::cout << opt->m_short_name << ", -";
+		std::cout << "  ";
+		if (opt->m_short_name != 0)
+			std::cout << '-' << opt->m_short_name;
 
-		std::cout << '-' << opt->m_name;
+		if (opt->m_short_name != 0 && opt->m_name != nullptr)
+			std::cout << ", ";
 
-		if (opt->m_short_name != nullptr) {
-			for (uint8_t i = 0; i < 20 - strlen(opt->m_name) - strlen(opt->m_short_name); i++)
+		if (opt->m_name != nullptr)
+			std::cout << "--" << opt->m_name;
+
+		if (opt->m_short_name != 0) {
+			for (uint8_t i = 0; i < 16 - strlen(opt->m_name); i++)
 				std::cout << ' ';
 		} else {
 			for (uint8_t i = 0; i < 20 - strlen(opt->m_name); i++)
@@ -189,7 +284,10 @@ void Parser::print_help_message()
 		std::cout << opt->m_description << std::endl;
 	}
 
-	std::cout << std::endl << std::endl << m_description << std::endl;
+	if (m_description)
+		std::cout << std::endl << std::endl << m_description << std::endl;
+
+	return 1;
 }
 
 } // namespace Arguments
