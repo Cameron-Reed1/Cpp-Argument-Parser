@@ -7,6 +7,16 @@ namespace Cam
 namespace Arguments
 {
 
+enum ERROR {
+	IMPOSSIBLE = -1,
+	NO_ERROR,
+	ERROR_UNKNOWN_OPTION,
+	ERROR_INCORRECT_TYPE,
+	ERROR_MISSING_ARGUMENT,
+	ERROR_MISSING_POSITIONAL_ARGUMENT,
+	SPECIAL_CASE_HELP
+};
+
 enum OPTTYPE
 {
 	FLAG = 0,
@@ -54,18 +64,18 @@ public:
 	void set_description(const char* description);
 	void add_option(Option* opt);
 	void add_positional_argument(PositionalArgument* arg);
-	int parse(int argc, char** argv);
+	ERROR parse(int argc, char** argv);
 private:
-	int print_help_message();
-	int handle_long_option(const char* option, const char* next_value);
-	int handle_short_option(const char option, const char* next_value);
-	int handle_positional_argument(const char* arg);
-	int get_option_data(Option* opt, const char* data_str);
-	int unknown_option(const char* option);
-	int unknown_option(const char option);
-	int incorrect_type(const char* option, const char* got);
-	int missing_argument(const char* option);
-	int missing_positional_argument(const char* arg);
+	ERROR print_help_message();
+	ERROR handle_long_option(const char* option, const char* next_value);
+	ERROR handle_short_option(const char option, const char* next_value);
+	ERROR handle_positional_argument(const char* arg);
+	ERROR get_option_data(Option* opt, const char* option_name, const char* data_str);
+	ERROR unknown_option(const char* option);
+	ERROR unknown_option(const char option);
+	ERROR incorrect_type(const char* option, const char* got);
+	ERROR missing_argument(const char* option);
+	ERROR missing_positional_argument(const char* arg);
 private:
 	const char* m_program_name;
 	const char* m_description;

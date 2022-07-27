@@ -8,11 +8,11 @@ int main(int argc, char **argv) {
 
 	parser.set_description("A test of argument parsing :)");
 
-	Arguments::Option first("first", 'f', "First arg", Arguments::STRING);
+	Arguments::Option first('f', "First arg", Arguments::STRING);
 	Arguments::Option second("second", 's', "Second arg", Arguments::INT);
-	Arguments::Option third("third", 't', "Third arg", Arguments::FLAG);
+	Arguments::Option third("third", "Third arg", Arguments::FLAG);
 
-	Arguments::PositionalArgument name("name", false, Arguments::STRING);
+	Arguments::PositionalArgument name("name", true, Arguments::STRING);
 	Arguments::PositionalArgument age("age", false, Arguments::INT);
 
 	parser.add_option(&first);
@@ -23,7 +23,7 @@ int main(int argc, char **argv) {
 	parser.add_positional_argument(&age);
 
 	if (parser.parse(argc, argv) != 0) {
-		return -1;
+		return 0;
 	}
 
 	std::cout << "Found:" << std::endl;

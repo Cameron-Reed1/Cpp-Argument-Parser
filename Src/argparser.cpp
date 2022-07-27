@@ -68,13 +68,13 @@ void Parser::add_positional_argument(PositionalArgument* arg)
 	m_positional_args.push_back(arg);
 }
 
-int Parser::parse(int argc, char ** argv)
+ERROR Parser::parse(int argc, char ** argv)
 {
 	for (m_opt_index = 1; m_opt_index < argc; m_opt_index++)
 	{
 		if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] == '-') {
 
-			int ret = handle_long_option(argv[m_opt_index] + 2, m_opt_index + 1 < argc ? argv[m_opt_index + 1] : nullptr);
+			ERROR ret = handle_long_option(argv[m_opt_index] + 2, m_opt_index + 1 < argc ? argv[m_opt_index + 1] : nullptr);
 			if (ret)
 				return ret;
 
@@ -82,7 +82,7 @@ int Parser::parse(int argc, char ** argv)
 
 			for (uint8_t i = 1; argv[m_opt_index][i] != 0; i++) {
 				bool last = argv[m_opt_index][i + 1] == 0;
-				int ret = handle_short_option(argv[m_opt_index][i], m_opt_index + 1 < argc && last ? argv[m_opt_index + 1] : nullptr);
+				ERROR ret = handle_short_option(argv[m_opt_index][i], m_opt_index + 1 < argc && last ? argv[m_opt_index + 1] : nullptr);
 				if (ret)
 					return ret;
 				if (last)
@@ -91,7 +91,7 @@ int Parser::parse(int argc, char ** argv)
 
 		} else {
 
-			int ret = handle_positional_argument(argv[m_opt_index]);
+			ERROR ret = handle_positional_argument(argv[m_opt_index]);
 			if (ret)
 				return ret;
 
@@ -105,14 +105,16 @@ int Parser::parse(int argc, char ** argv)
 		}
 	}
 
-	return 0;
+	return NO_ERROR;
 }
 
-int Parser::handle_long_option(const char* option, const char* next_value)
+ERROR Parser::handle_long_option(const char* option, const char* next_value)
 {
 	Option* matched_option = nullptr;
 
 	for (Option* opt: m_options) {
+		if (opt->m_name == nullptr)
+			continue;
 		if (strcmp(opt->m_name, option) == 0) {
 			matched_option = opt;
 			break;
@@ -129,16 +131,16 @@ int Parser::handle_long_option(const char* option, const char* next_value)
 	} else {
 
 		matched_option->m_found = true;
-		return get_option_data(matched_option, next_value);
+		return get_option_data(matched_option, matched_option->m_name, next_value);
 
 	}
 
 	std::cout << "Congratulations! You have reached an impossible state" << std::endl << std::endl;
 	std::cout << "Reality is broken :)" << std::endl;
-	return -1;
+	return IMPOSSIBLE;
 }
 
-int Parser::handle_short_option(const char option, const char* next_value)
+ERROR Parser::handle_short_option(const char option, const char* next_value)
 {
 	Option* matched_option = nullptr;
 
@@ -159,16 +161,20 @@ int Parser::handle_short_option(const char option, const char* next_value)
 	} else {
 
 		matched_option->m_found = true;
-		return get_option_data(matched_option, next_value);
+		char* name = new char[2];
+		name[0] = matched_option->m_short_name;
+		name[1] = 0;
+		return get_option_data(matched_option, name, next_value);
+		delete[] name;
 
 	}
 
 	std::cout << "Congratulations! You have reached impossible state #2" << std::endl << std::endl;
 	std::cout << "Reality is broken :)" << std::endl;
-	return -1;
+	return IMPOSSIBLE;
 }
 
-int Parser::handle_positional_argument(const char* arg)
+ERROR Parser::handle_positional_argument(const char* arg)
 {
 	if (m_pos_index >= m_positional_args.size())
 		return unknown_option(arg);
@@ -187,16 +193,16 @@ int Parser::handle_positional_argument(const char* arg)
 
 	pos_arg->m_found = true;
 	m_pos_index++;
-	return 0;
+	return NO_ERROR;
 }
 
-int Parser::get_option_data(Option* opt, const char* data_str)
+ERROR Parser::get_option_data(Option* opt, const char* option_name, const char* data_str)
 {
 	if (opt->m_type == FLAG)
-		return 0;
+		return NO_ERROR;
 
 	if (data_str == nullptr || data_str[0] == '-')
-		return missing_argument(opt->m_name);
+		return missing_argument(option_name);
 
 	if (opt->m_type == INT) {
 		int* val = new int;
@@ -208,48 +214,48 @@ int Parser::get_option_data(Option* opt, const char* data_str)
 	}
 
 	m_opt_index++;
-	return 0;
+	return NO_ERROR;
 }
 
-int Parser::unknown_option(const char* option)
+ERROR Parser::unknown_option(const char* option)
 {
 	std::cout << m_program_name << ": invalid option '" << option << '\'' << std::endl << std::endl;
 	std::cout << "See " << m_program_name << " --help" << std::endl;
 
-	return -1;
+	return ERROR_UNKNOWN_OPTION;
 }
 
-int Parser::unknown_option(const char option)
+ERROR Parser::unknown_option(const char option)
 {
 	std::cout << m_program_name << ": invalid option: " << option << std::endl << std::endl;
 	std::cout << "See " << m_program_name << " --help" << std::endl;
 
-	return -1;
+	return ERROR_UNKNOWN_OPTION;
 }
 
-int Parser::incorrect_type(const char* option, const char* got)
+ERROR Parser::incorrect_type(const char* option, const char* got)
 {
 	std::cout << m_program_name << ": argument '" << option << "' expects an integer as an argument, got " << got << " instead" << std::endl;
 
-	return -4;
+	return ERROR_INCORRECT_TYPE;
 }
 
-int Arguments::Parser::missing_argument(const char* option)
+ERROR Parser::missing_argument(const char* option)
 {
 	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
 
-	return -3;
+	return ERROR_MISSING_ARGUMENT;
 }
 
-int Parser::missing_positional_argument(const char* arg)
+ERROR Parser::missing_positional_argument(const char* arg)
 {
 	std::cout << m_program_name << ": Missing required positional argument '" << arg << "'" << std::endl << std::endl;
 	std::cout << "See " << m_program_name << " --help" << std::endl;
 
-	return -5;
+	return ERROR_MISSING_POSITIONAL_ARGUMENT;
 }
 
-int Parser::print_help_message()
+ERROR Parser::print_help_message()
 {
 	std::cout << "Usage: " << m_program_name << (m_options.size() > 0 ? " [OPTIONS]" : "");
 	for (PositionalArgument* arg: m_positional_args)
@@ -273,11 +279,11 @@ int Parser::print_help_message()
 		if (opt->m_name != nullptr)
 			std::cout << "--" << opt->m_name;
 
-		if (opt->m_short_name != 0) {
-			for (uint8_t i = 0; i < 16 - strlen(opt->m_name); i++)
+		if (opt->m_name != nullptr) {
+			for (uint8_t i = 0; i < 20 - strlen(opt->m_name) - ((opt->m_short_name != 0) * 4); i++)
 				std::cout << ' ';
 		} else {
-			for (uint8_t i = 0; i < 20 - strlen(opt->m_name); i++)
+			for (uint8_t i = 0; i < 24 - ((opt->m_short_name != 0) * 4); i++)
 				std::cout << ' ';
 		}
 
@@ -287,7 +293,7 @@ int Parser::print_help_message()
 	if (m_description)
 		std::cout << std::endl << std::endl << m_description << std::endl;
 
-	return 1;
+	return SPECIAL_CASE_HELP;
 }
 
 } // namespace Arguments
