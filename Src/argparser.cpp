@@ -36,7 +36,7 @@ bool Option::found()
 }
 
 PositionalArgument::PositionalArgument(const char* name, bool required, OPTTYPE type /* = STRING */)
-	: m_name(name), m_type(type), m_req(required)
+	: m_name(name), m_type(type), m_req(required), m_found(false)
 {
 	if (type == FLAG) {
 		std::cout << "Warning OPTTYPE 'FLAG' is not meant to be used with positional arguments" << std::endl;
@@ -51,7 +51,7 @@ bool PositionalArgument::found()
 }
 
 Parser::Parser(const char* program_name)
-	: m_program_name(program_name), m_description(nullptr), m_options() {}
+	: m_program_name(program_name), m_description(nullptr), m_options(), m_positional_args() {}
 
 void Parser::set_description(const char* description)
 {
@@ -68,8 +68,9 @@ void Parser::add_positional_argument(PositionalArgument* arg)
 	m_positional_args.push_back(arg);
 }
 
-ERROR Parser::parse(int argc, char ** argv)
+ERROR Parser::parse(int argc, char** argv)
 {
+	m_pos_index = 0;
 	for (m_opt_index = 1; m_opt_index < argc; m_opt_index++)
 	{
 		if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] == '-') {

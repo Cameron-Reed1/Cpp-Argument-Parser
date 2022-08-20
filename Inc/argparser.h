@@ -17,8 +17,7 @@ enum ERROR {
 	SPECIAL_CASE_HELP
 };
 
-enum OPTTYPE
-{
+enum OPTTYPE {
 	FLAG = 0,
 	STRING,
 	INT
@@ -79,7 +78,6 @@ private:
 private:
 	const char* m_program_name;
 	const char* m_description;
-	const char** m_argv;
 	uint16_t m_opt_index;
 	uint16_t m_pos_index;
 	std::vector<Option*> m_options;

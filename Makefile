@@ -52,7 +52,7 @@ test_installed:
 	$(CXX) test.cpp $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
 	-$(BUILD_DIR)/test
 
-install:
+install: all
 	$(CP) $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
 	$(CP) $(HEADERS) $(HEADER_INSTALL_DIR)
 
@@ -63,4 +63,4 @@ uninstall:
 clean:
 	$(RM) -r $(BUILD_DIR)
 
-.PHONY: test install uninstall clean
+.PHONY: all test install uninstall clean
