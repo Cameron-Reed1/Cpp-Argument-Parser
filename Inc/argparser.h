@@ -8,8 +8,7 @@ namespace Arguments
 {
 
 enum ERROR {
-	IMPOSSIBLE = -1,
-	NO_ERROR,
+	NO_ERROR = 0,
 	ERROR_UNKNOWN_OPTION,
 	ERROR_INCORRECT_TYPE,
 	ERROR_MISSING_ARGUMENT,
@@ -70,10 +69,12 @@ private:
 	ERROR handle_short_option(const char option, const char* next_value);
 	ERROR handle_positional_argument(const char* arg);
 	ERROR get_option_data(Option* opt, const char* option_name, const char* data_str);
+	ERROR get_option_data(Option* opt, const char option_name, const char* data_str);
 	ERROR unknown_option(const char* option);
 	ERROR unknown_option(const char option);
 	ERROR incorrect_type(const char* option, const char* got);
 	ERROR missing_argument(const char* option);
+	ERROR missing_argument(const char option);
 	ERROR missing_positional_argument(const char* arg);
 private:
 	const char* m_program_name;

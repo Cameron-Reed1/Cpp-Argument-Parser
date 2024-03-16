@@ -129,16 +129,11 @@ ERROR Parser::handle_long_option(const char* option, const char* next_value)
 
 		return unknown_option(option);
 
-	} else {
+	} 
 
-		matched_option->m_found = true;
-		return get_option_data(matched_option, matched_option->m_name, next_value);
 
-	}
-
-	std::cout << "Congratulations! You have reached an impossible state" << std::endl << std::endl;
-	std::cout << "Reality is broken :)" << std::endl;
-	return IMPOSSIBLE;
+	matched_option->m_found = true;
+	return get_option_data(matched_option, option, next_value);
 }
 
 ERROR Parser::handle_short_option(const char option, const char* next_value)
@@ -159,20 +154,11 @@ ERROR Parser::handle_short_option(const char option, const char* next_value)
 
 		return unknown_option(option);
 
-	} else {
-
-		matched_option->m_found = true;
-		char* name = new char[2];
-		name[0] = matched_option->m_short_name;
-		name[1] = 0;
-		return get_option_data(matched_option, name, next_value);
-		delete[] name;
-
 	}
 
-	std::cout << "Congratulations! You have reached impossible state #2" << std::endl << std::endl;
-	std::cout << "Reality is broken :)" << std::endl;
-	return IMPOSSIBLE;
+
+	matched_option->m_found = true;
+	return get_option_data(matched_option, option, next_value);
 }
 
 ERROR Parser::handle_positional_argument(const char* arg)
@@ -218,6 +204,27 @@ ERROR Parser::get_option_data(Option* opt, const char* option_name, const char* 
 	return NO_ERROR;
 }
 
+ERROR Parser::get_option_data(Option* opt, const char option_name, const char* data_str)
+{
+	if (opt->m_type == FLAG)
+		return NO_ERROR;
+
+	if (data_str == nullptr || data_str[0] == '-')
+		return missing_argument(option_name);
+
+	if (opt->m_type == INT) {
+		int* val = new int;
+		if ((*val = stringToInt(data_str)) == -1)
+			return incorrect_type(opt->m_name, data_str);
+		opt->data = val;
+	} else {
+		opt->data = (void*) data_str;
+	}
+
+	m_opt_index++;
+	return NO_ERROR;
+}
+
 ERROR Parser::unknown_option(const char* option)
 {
 	std::cout << m_program_name << ": invalid option '" << option << '\'' << std::endl << std::endl;
@@ -242,6 +249,13 @@ ERROR Parser::incorrect_type(const char* option, const char* got)
 }
 
 ERROR Parser::missing_argument(const char* option)
+{
+	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
+
+	return ERROR_MISSING_ARGUMENT;
+}
+
+ERROR Parser::missing_argument(const char option)
 {
 	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
 
