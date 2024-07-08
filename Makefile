@@ -2,9 +2,10 @@ TYPE = STATIC
 SHARED_TYPE = SHARED
 STATIC_TYPE = STATIC
 
-BUILD_DIR = bin
 SOURCE_DIR = Src
 HEADER_DIR = Inc
+BUILD_DIR = bin
+
 HEADER_INSTALL_DIR = /usr/local/include
 INSTALL_DIR = /usr/local/lib
 
@@ -17,8 +18,7 @@ endif
 
 OPT = -O2
 
-INCS = \
--IInc
+INCS = -IInc
 
 C_SOURCES = $(wildcard $(SOURCE_DIR)/*.c)
 CXX_SOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
@@ -38,25 +38,20 @@ endif
 
 HEADERS = $(wildcard $(HEADER_DIR)/*.h)
 
-CP = cp
-MKDIR = mkdir -p
 ARFLAGS = rvc
-SED = sed -i -e
-CHMOD = chmod
-LDCONFIG = ldconfig
 
 all: $(BUILD_DIR)/$(LIB_FILE_NAME)
 
 ifneq ($(TYPE), $(SHARED_TYPE))
 shared: clean
-	@$(SED) "s/^TYPE = .*$$/TYPE = $(SHARED_TYPE)/" Makefile
+	@sed -i -e "s/^TYPE = .*$$/TYPE = $(SHARED_TYPE)/" Makefile
 
 .PHONY: shared
 endif
 
 ifneq ($(TYPE), $(STATIC_TYPE))
 static: clean
-	@$(SED) "s/^TYPE = .*$$/TYPE = $(STATIC_TYPE)/" Makefile
+	@sed -i -e "s/^TYPE = .*$$/TYPE = $(STATIC_TYPE)/" Makefile
 
 .PHONY: static
 endif
@@ -75,29 +70,29 @@ $(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_DIR)
 	$(CXX) -c $< $(CXXFLAGS) -o $@
 
 $(BUILD_DIR):
-	$(MKDIR) $@
+	mkdir -p $@
 
-test: all
-	$(CXX) test.cpp $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) $(TESTFLAGS) -o $(BUILD_DIR)/test
+test: test.cpp all | $(BUILD_DIR)
+	$(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) $(TESTFLAGS) -o $(BUILD_DIR)/test
 	-$(BUILD_DIR)/test
 
-test_installed:
-	$(CXX) test.cpp $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
+test_installed: test.cpp | $(BUILD_DIR)
+	$(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
 	-$(BUILD_DIR)/test
 
 install: all
-	$(CP) $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
-	$(CP) $(HEADERS) $(HEADER_INSTALL_DIR)
-	@$(CHMOD) 0755 $(INSTALL_DIR)/$(LIB_FILE_NAME)
+	cp $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
+	cp $(HEADERS) $(HEADER_INSTALL_DIR)
+	@chmod 0755 $(INSTALL_DIR)/$(LIB_FILE_NAME)
 ifeq ($(TYPE), $(SHARED_TYPE))
-	@$(LDCONFIG)
+	@ldconfig
 endif
 
 uninstall:
 	$(RM) $(INSTALL_DIR)/$(LIB_FILE_NAME)
 	$(RM) $(addprefix $(HEADER_INSTALL_DIR)/, $(notdir $(HEADERS)))
 ifeq ($(TYPE), $(SHARED_TYPE))
-	@$(LDCONFIG)
+	@ldconfig
 endif
 
 clean:

@@ -2,88 +2,161 @@
 #include <vector>
 #include <stdint.h>
 
-namespace Cam
-{
 namespace Arguments
 {
 
 enum ERROR {
 	NO_ERROR = 0,
-	ERROR_UNKNOWN_OPTION,
-	ERROR_INCORRECT_TYPE,
-	ERROR_MISSING_ARGUMENT,
+	ERROR_UNKNOWN_ARGUMENT,
+	ERROR_UNKNOWN_POSITIONAL_ARGUMENT,
+	ERROR_MISSING_VALUE,
 	ERROR_MISSING_POSITIONAL_ARGUMENT,
-	SPECIAL_CASE_HELP
-};
-
-enum OPTTYPE {
-	FLAG = 0,
-	STRING,
-	INT
-};
-
-class Option
-{
-public:
-	Option(const char* name, const char* description, OPTTYPE type);
-	Option(const char* name, const char short_name, const char* description, OPTTYPE type);
-	Option(const char short_name, const char* description, OPTTYPE type);
-	bool found();
-	void* data;
-private:
-	const char* m_name;
-	const char m_short_name;
-	const char* m_description;
-	OPTTYPE m_type;
-	bool m_found;
-
-	friend class Parser;
-};
-
-class PositionalArgument
-{
-public:
-	PositionalArgument(const char* name, bool required, OPTTYPE type = STRING);
-	bool found();
-	void* data;
-private:
-	const char* m_name;
-	OPTTYPE m_type;
-	bool m_req;
-	bool m_found;
-
-	friend class Parser;
+    ERROR_INVALID_INT,
+	SPECIAL_CASE_HELP,
 };
 
 class Parser
 {
 public:
-	Parser(const char* program_name);
-	void set_description(const char* description);
-	void add_option(Option* opt);
-	void add_positional_argument(PositionalArgument* arg);
-	ERROR parse(int argc, char** argv);
+    Parser(int argc, char** argv);
+
+    bool hasNext();
+    void next();
+    const char* value();
+
 private:
-	ERROR print_help_message();
-	ERROR handle_long_option(const char* option, const char* next_value);
-	ERROR handle_short_option(const char option, const char* next_value);
-	ERROR handle_positional_argument(const char* arg);
-	ERROR get_option_data(Option* opt, const char* option_name, const char* data_str);
-	ERROR get_option_data(Option* opt, const char option_name, const char* data_str);
-	ERROR unknown_option(const char* option);
-	ERROR unknown_option(const char option);
-	ERROR incorrect_type(const char* option, const char* got);
-	ERROR missing_argument(const char* option);
-	ERROR missing_argument(const char option);
-	ERROR missing_positional_argument(const char* arg);
-private:
-	const char* m_program_name;
-	const char* m_description;
-	uint16_t m_opt_index;
-	uint16_t m_pos_index;
-	std::vector<Option*> m_options;
-	std::vector<PositionalArgument*> m_positional_args;
+    int m_ArgCount;
+    char** m_ArgValues;
+
+    int m_Index;
 };
 
+
+class Argument
+{
+public:
+    Argument(const char* name);
+    Argument(char name);
+
+    Argument& description(const char* desc);
+
+    Argument& alias(const char* alias);
+    Argument& alias(char alias);
+
+    bool matches(const char*);
+    bool matchesShort(char);
+
+    virtual ERROR noValue() = 0;
+    virtual ERROR parseValue(Parser& state) = 0;
+
+public:
+    bool found;
+
+protected:
+    const char* m_Name;
+    char m_ShortName;
+
+    const char* m_Description;
+
+private:
+    std::vector<const char*> m_Aliases;
+    std::vector<char> m_ShortAliases;
+};
+
+
+class Int: public Argument
+{
+public:
+    Int(const char* name, int64_t defaultValue);
+    Int(char name, int64_t defaultValue);
+
+    ERROR noValue() override;
+    ERROR parseValue(Parser& state) override;
+
+public:
+    int64_t value;
+
+private:
+    void printMissingValueError();
+};
+
+class String: public Argument
+{
+public:
+    String(const char* name, const char* defaultValue);
+    String(char name, const char* defaultValue);
+
+    ERROR noValue() override;
+    ERROR parseValue(Parser& state) override;
+
+public:
+    const char* value;
+
+private:
+    void printMissingValueError();
+};
+
+class Bool: public Argument
+{
+public:
+    Bool(const char* name);
+    Bool(char name);
+
+    ERROR noValue() override;
+    ERROR parseValue(Parser& state) override;
+};
+
+
+class PositionalArgument
+{
+public:
+    PositionalArgument(bool required);
+
+    void description(const char* desc);
+
+    virtual ERROR parseValue(Parser& state) = 0;
+
+public:
+    bool found;
+    bool required;
+
+private:
+    const char* m_Description;
+};
+
+
+class PositionalInt: public PositionalArgument
+{
+public:
+    PositionalInt(int64_t defaultValue, bool required);
+
+    ERROR parseValue(Parser& state) override;
+
+public:
+    int64_t value;
+};
+
+class PositionalString: public PositionalArgument
+{
+public:
+    PositionalString(const char* defaultValue, bool required);
+
+    ERROR parseValue(Parser& state) override;
+
+public:
+    const char* value;
+};
+
+
+ERROR parse(int argc, char** argv);
+ERROR findMatch(Parser& parser, const char* name);
+ERROR findShortMatch(Parser& parser, char name, bool last);
+ERROR matchPositional(Parser& parser);
+
+void printInvalidIntError(const char* value);
+void printUnknownArgError(const char* argument);
+void printUnknownArgError(char argument);
+void printUnknownPosArgError(const char* value);
+
 } // namespace Arguments
-} // namespace Cam
+

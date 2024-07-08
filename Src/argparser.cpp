@@ -1,315 +1,384 @@
-#include "argparser.h"
-#include <stdint.h>
-#include <string.h>
 #include <iostream>
+#include <cctype>
+#include <cstddef>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
 
-int stringToInt(const char* input)
-{
-	int value = 0;
-	for (int i = 0; input[i] != 0; i++)
-	{
-		if (input[i] < '0' || input[i] > '9')
-			return -1;
-		value = (value * 10) + input[i] - '0';
-	}
+#include "argparser.h"
 
-	return value;
-}
 
-namespace Cam
-{
 namespace Arguments
 {
+static std::vector<Argument*> arguments;
+static std::vector<PositionalArgument*> positionalArguments;
+static size_t posArgIdx = 0;
 
-Option::Option(const char* name, const char* description, OPTTYPE type)
-	: m_name(name), m_short_name(0), m_description(description), m_type(type), m_found(false) {}
 
-Option::Option(const char* name, const char short_name, const char* description, OPTTYPE type)
-	: m_name(name), m_short_name(short_name), m_description(description), m_type(type), m_found(false) {}
+Parser::Parser(int argc, char** argv)
+    : m_ArgCount(argc), m_ArgValues(argv), m_Index(0) { };
 
-Option::Option(const char short_name, const char* description, OPTTYPE type)
-	: m_name(nullptr), m_short_name(short_name), m_description(description), m_type(type), m_found(false) {}
-
-bool Option::found()
+const char* Parser::value()
 {
-	return m_found;
+    if (m_Index >= m_ArgCount) {
+        return nullptr;
+    } else {
+        return m_ArgValues[m_Index];
+    }
 }
 
-PositionalArgument::PositionalArgument(const char* name, bool required, OPTTYPE type /* = STRING */)
-	: m_name(name), m_type(type), m_req(required), m_found(false)
+bool Parser::hasNext()
 {
-	if (type == FLAG) {
-		std::cout << "Warning OPTTYPE 'FLAG' is not meant to be used with positional arguments" << std::endl;
-		std::cout << "Assuming type 'STRING' instead" << std::endl;
-		m_type = STRING;
-	}
+    return m_Index + 1 < m_ArgCount;
 }
 
-bool PositionalArgument::found()
+void Parser::next()
 {
-	return m_found;
+    m_Index++;
 }
 
-Parser::Parser(const char* program_name)
-	: m_program_name(program_name), m_description(nullptr), m_options(), m_positional_args() {}
 
-void Parser::set_description(const char* description)
+Argument::Argument(const char* name)
+    : found(false), m_Name(name), m_ShortName(0)
 {
-	m_description = description;
+    arguments.push_back(this);
+};
+
+Argument::Argument(char name)
+    : m_Name(nullptr), m_ShortName(name)
+{
+    arguments.push_back(this);
+};
+
+Argument& Argument::description(const char* desc)
+{
+    m_Description = desc;
+    return *this;
 }
 
-void Parser::add_option(Option* opt)
+Argument& Argument::alias(const char* alias)
 {
-	m_options.push_back(opt);
+    m_Aliases.push_back(alias);
+    return *this;
 }
 
-void Parser::add_positional_argument(PositionalArgument* arg)
+Argument& Argument::alias(char alias)
 {
-	m_positional_args.push_back(arg);
+    m_ShortAliases.push_back(alias);
+    return *this;
 }
 
-ERROR Parser::parse(int argc, char** argv)
+bool Argument::matches(const char* arg)
 {
-	m_pos_index = 0;
-	for (m_opt_index = 1; m_opt_index < argc; m_opt_index++)
-	{
-		if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] == '-') {
+    if (m_Name != nullptr) {
+        if (std::strlen(arg) == std::strlen(m_Name)) {
+            if (std::strcmp(arg, m_Name) == 0) {
+                return true;
+            }
+        }
+    }
 
-			ERROR ret = handle_long_option(argv[m_opt_index] + 2, m_opt_index + 1 < argc ? argv[m_opt_index + 1] : nullptr);
-			if (ret)
-				return ret;
+    for (const char* alias: m_Aliases) {
+        if (std::strlen(arg) == std::strlen(alias)) {
+            if (std::strcmp(arg, alias) == 0) {
+                return true;
+            }
+        }
+    }
 
-		} else if (argv[m_opt_index][0] == '-' && argv[m_opt_index][1] != '-') {
-
-			for (uint8_t i = 1; argv[m_opt_index][i] != 0; i++) {
-				bool last = argv[m_opt_index][i + 1] == 0;
-				ERROR ret = handle_short_option(argv[m_opt_index][i], m_opt_index + 1 < argc && last ? argv[m_opt_index + 1] : nullptr);
-				if (ret)
-					return ret;
-				if (last)
-					break;
-			}
-
-		} else {
-
-			ERROR ret = handle_positional_argument(argv[m_opt_index]);
-			if (ret)
-				return ret;
-
-		}
-	}
-
-	if (m_pos_index < m_positional_args.size()) {
-		for (; m_pos_index < m_positional_args.size(); m_pos_index++) {
-			if (m_positional_args[m_pos_index]->m_req)
-				return missing_positional_argument(m_positional_args[m_pos_index]->m_name);
-		}
-	}
-
-	return NO_ERROR;
+    return false;
 }
 
-ERROR Parser::handle_long_option(const char* option, const char* next_value)
+bool Argument::matchesShort(char arg)
 {
-	Option* matched_option = nullptr;
+    if (arg == 0) {
+        return false;
+    }
 
-	for (Option* opt: m_options) {
-		if (opt->m_name == nullptr)
-			continue;
-		if (strcmp(opt->m_name, option) == 0) {
-			matched_option = opt;
-			break;
-		}
-	}
+    if (arg == m_ShortName) {
+        return true;
+    }
 
-	if (matched_option == nullptr) {
+    for (char alias: m_ShortAliases) {
+        if (arg == alias) {
+            return true;
+        }
+    }
 
-		if (strcmp("help", option) == 0)
-			return print_help_message();
-
-		return unknown_option(option);
-
-	} 
-
-
-	matched_option->m_found = true;
-	return get_option_data(matched_option, option, next_value);
+    return false;
 }
 
-ERROR Parser::handle_short_option(const char option, const char* next_value)
+
+Int::Int(const char* name, int64_t defaultValue)
+    : Argument(name), value(defaultValue) { }
+
+Int::Int(char name, int64_t defaultValue)
+    : Argument(name), value(defaultValue) { }
+
+ERROR Int::noValue()
 {
-	Option* matched_option = nullptr;
-
-	for (Option* opt: m_options) {
-		if (opt->m_short_name == option) {
-			matched_option = opt;
-			break;
-		}
-	}
-
-	if (matched_option == nullptr) {
-
-		if ('h' == option)
-			return print_help_message();
-
-		return unknown_option(option);
-
-	}
-
-
-	matched_option->m_found = true;
-	return get_option_data(matched_option, option, next_value);
+    printMissingValueError();
+    return ERROR_MISSING_VALUE;
 }
 
-ERROR Parser::handle_positional_argument(const char* arg)
+ERROR Int::parseValue(Parser& state)
 {
-	if (m_pos_index >= m_positional_args.size())
-		return unknown_option(arg);
+    if (!state.hasNext()) {
+        printMissingValueError();
+        return ERROR_MISSING_VALUE;
+    }
 
-	PositionalArgument* pos_arg = m_positional_args[m_pos_index];
+    state.next();
 
-	if (pos_arg->m_type == INT) {
-		int* val = new int;
-		if ((*val = stringToInt(arg)) == -1)
-			return incorrect_type(pos_arg->m_name, arg);
+    const char* val = state.value();
+    if (*val == '-' || *val == '+') {
+        val++;
+    }
 
-		pos_arg->data = val;
-	} else {
-		pos_arg->data = (void*) arg;
-	}
+    while (*val != '\0') {
+        if (*val < '0' || *val > '9') {
+            printInvalidIntError(state.value());
+            return ERROR_INVALID_INT;
+        }
+        val++;
+    }
 
-	pos_arg->m_found = true;
-	m_pos_index++;
-	return NO_ERROR;
+    found = true;
+    value = std::atoi(state.value());
+
+    return NO_ERROR;
 }
 
-ERROR Parser::get_option_data(Option* opt, const char* option_name, const char* data_str)
+void Int::printMissingValueError()
 {
-	if (opt->m_type == FLAG)
-		return NO_ERROR;
-
-	if (data_str == nullptr || data_str[0] == '-')
-		return missing_argument(option_name);
-
-	if (opt->m_type == INT) {
-		int* val = new int;
-		if ((*val = stringToInt(data_str)) == -1)
-			return incorrect_type(opt->m_name, data_str);
-		opt->data = val;
-	} else {
-		opt->data = (void*) data_str;
-	}
-
-	m_opt_index++;
-	return NO_ERROR;
+    std::cerr << "Missing integer value for argument ";
+    if (m_Name != nullptr) {
+        std::cerr << "--" << m_Name << std::endl;
+    } else {
+        std::cerr << "-" << m_ShortName << std::endl;
+    }
 }
 
-ERROR Parser::get_option_data(Option* opt, const char option_name, const char* data_str)
+
+String::String(const char* name, const char* defaultValue)
+    : Argument(name), value(defaultValue) { }
+
+String::String(char name, const char* defaultValue)
+    : Argument(name), value(defaultValue) { }
+
+ERROR String::noValue()
 {
-	if (opt->m_type == FLAG)
-		return NO_ERROR;
-
-	if (data_str == nullptr || data_str[0] == '-')
-		return missing_argument(option_name);
-
-	if (opt->m_type == INT) {
-		int* val = new int;
-		if ((*val = stringToInt(data_str)) == -1)
-			return incorrect_type(opt->m_name, data_str);
-		opt->data = val;
-	} else {
-		opt->data = (void*) data_str;
-	}
-
-	m_opt_index++;
-	return NO_ERROR;
+    printMissingValueError();
+    return ERROR_MISSING_VALUE;
 }
 
-ERROR Parser::unknown_option(const char* option)
+ERROR String::parseValue(Parser& state)
 {
-	std::cout << m_program_name << ": invalid option '" << option << '\'' << std::endl << std::endl;
-	std::cout << "See " << m_program_name << " --help" << std::endl;
+    if (!state.hasNext()) {
+        printMissingValueError();
+        return ERROR_MISSING_VALUE;
+    }
 
-	return ERROR_UNKNOWN_OPTION;
+    found = true;
+
+    state.next();
+    value = state.value();
+
+    return NO_ERROR;
 }
 
-ERROR Parser::unknown_option(const char option)
+void String::printMissingValueError()
 {
-	std::cout << m_program_name << ": invalid option: " << option << std::endl << std::endl;
-	std::cout << "See " << m_program_name << " --help" << std::endl;
-
-	return ERROR_UNKNOWN_OPTION;
+    std::cerr << "Missing value for argument ";
+    if (m_Name != nullptr) {
+        std::cerr << "--" << m_Name << std::endl;
+    } else {
+        std::cerr << "-" << m_ShortName << std::endl;
+    }
 }
 
-ERROR Parser::incorrect_type(const char* option, const char* got)
-{
-	std::cout << m_program_name << ": argument '" << option << "' expects an integer as an argument, got " << got << " instead" << std::endl;
 
-	return ERROR_INCORRECT_TYPE;
+Bool::Bool(const char* name)
+    : Argument(name) { }
+
+Bool::Bool(char name)
+    : Argument(name) { }
+
+ERROR Bool::noValue()
+{
+    found = true;
+
+    return NO_ERROR;
 }
 
-ERROR Parser::missing_argument(const char* option)
+ERROR Bool::parseValue(Parser& state)
 {
-	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
+    (void) state;
 
-	return ERROR_MISSING_ARGUMENT;
+    found = true;
+
+    return NO_ERROR;
 }
 
-ERROR Parser::missing_argument(const char option)
-{
-	std::cout << m_program_name << ": Missing argument for option '" << option << '\'' << std::endl;
 
-	return ERROR_MISSING_ARGUMENT;
+PositionalArgument::PositionalArgument(bool required)
+    : found(false), required(required), m_Description(nullptr)
+{
+    if (required) {
+        for (PositionalArgument* arg: positionalArguments) {
+            if (!arg->required) {
+                std::cerr << "All required positional arguments must be registered before any optional positional arguments" << std::endl;
+                exit(-1);
+            }
+        }
+    }
+
+    positionalArguments.push_back(this);
 }
 
-ERROR Parser::missing_positional_argument(const char* arg)
+void PositionalArgument::description(const char* desc)
 {
-	std::cout << m_program_name << ": Missing required positional argument '" << arg << "'" << std::endl << std::endl;
-	std::cout << "See " << m_program_name << " --help" << std::endl;
-
-	return ERROR_MISSING_POSITIONAL_ARGUMENT;
+    m_Description = desc;
 }
 
-ERROR Parser::print_help_message()
+
+PositionalInt::PositionalInt(int64_t defaultValue, bool required)
+    : PositionalArgument(required), value(defaultValue) { }
+
+ERROR PositionalInt::parseValue(Parser& state)
 {
-	std::cout << "Usage: " << m_program_name << (m_options.size() > 0 ? " [OPTIONS]" : "");
-	for (PositionalArgument* arg: m_positional_args)
-	{
-		std::cout << " " << arg->m_name;
-	}
-	std::cout << std::endl;
+    const char* val = state.value();
+    if (*val == '-' || *val == '+') {
+        val++;
+    }
+
+    while (*val != '\0') {
+        if (*val < '0' || *val > '9') {
+            printInvalidIntError(state.value());
+            return ERROR_INVALID_INT;
+        }
+        val++;
+    }
+
+    found = true;
+    value = std::atoi(state.value());
+
+    return NO_ERROR;
+}
 
 
-	if (m_options.size() > 0)
-		std::cout << std::endl << std::endl << "Options:" << std::endl;
-	for (Option* opt: m_options)
-	{
-		std::cout << "  ";
-		if (opt->m_short_name != 0)
-			std::cout << '-' << opt->m_short_name;
+PositionalString::PositionalString(const char* defaultValue, bool required)
+    : PositionalArgument(required), value(defaultValue) { }
 
-		if (opt->m_short_name != 0 && opt->m_name != nullptr)
-			std::cout << ", ";
+ERROR PositionalString::parseValue(Parser& state)
+{
+    found = true;
+    value = state.value();
 
-		if (opt->m_name != nullptr)
-			std::cout << "--" << opt->m_name;
+    return NO_ERROR;
+}
 
-		if (opt->m_name != nullptr) {
-			for (uint8_t i = 0; i < 20 - strlen(opt->m_name) - ((opt->m_short_name != 0) * 4); i++)
-				std::cout << ' ';
-		} else {
-			for (uint8_t i = 0; i < 24 - ((opt->m_short_name != 0) * 4); i++)
-				std::cout << ' ';
-		}
 
-		std::cout << opt->m_description << std::endl;
-	}
+ERROR parse(int argc, char** argv)
+{
+    Parser parser(argc, argv);
 
-	if (m_description)
-		std::cout << std::endl << std::endl << m_description << std::endl;
+    while (parser.hasNext()) {
+        parser.next(); // This is OK on the first iteration because it skips the executable name
 
-	return SPECIAL_CASE_HELP;
+        const char* value = parser.value();
+        bool firstDash = value[0] == '-';
+        bool secondDash = value[1] == '-';
+
+        if (firstDash && secondDash) {
+            ERROR err = findMatch(parser, value + 2);
+            if (err != NO_ERROR) {
+                return err;
+            }
+        } else if (firstDash) {
+            size_t len = std::strlen(value);
+            for (size_t i = 1; i < len; i++) {
+                ERROR err = findShortMatch(parser, value[i], i == len - 1);
+                if (err != NO_ERROR) {
+                    return err;
+                }
+            }
+        } else {
+            ERROR err = matchPositional(parser);
+            if (err != NO_ERROR) {
+                return err;
+            }
+        }
+    }
+
+    if (posArgIdx < positionalArguments.size()) {
+        if (positionalArguments[posArgIdx]->required) {
+            std::cerr << "Missing required positional argument" << std::endl;
+            return ERROR_MISSING_POSITIONAL_ARGUMENT;
+        }
+    }
+
+    return NO_ERROR;
+}
+
+ERROR findMatch(Parser& parser, const char* name)
+{
+    for (Argument* arg: arguments) {
+        if (arg->matches(name)) {
+            return arg->parseValue(parser);
+        }
+    }
+
+    printUnknownArgError(name);
+    return ERROR_UNKNOWN_ARGUMENT;
+}
+
+ERROR findShortMatch(Parser &parser, char name, bool last)
+{
+    for (Argument* arg: arguments) {
+        if (arg->matchesShort(name)) {
+            if (last) {
+                return arg->parseValue(parser);
+            }
+
+            return arg->noValue();
+        }
+    }
+
+    printUnknownArgError(name);
+    return ERROR_UNKNOWN_ARGUMENT;
+}
+
+ERROR matchPositional(Parser &parser)
+{
+    if (posArgIdx >= positionalArguments.size()) {
+        printUnknownPosArgError(parser.value());
+        return ERROR_UNKNOWN_POSITIONAL_ARGUMENT;
+    }
+
+    return positionalArguments[posArgIdx++]->parseValue(parser);
+}
+
+void printInvalidIntError(const char* value)
+{
+    std::cerr << value << " is not an integer" << std::endl;
+}
+
+void printUnknownArgError(const char* argument)
+{
+    std::cerr << "Unknown argument --" << argument << std::endl;
+}
+
+void printUnknownArgError(char argument)
+{
+    std::cerr << "Unknown argument -" << argument << std::endl;
+}
+
+void printUnknownPosArgError(const char* value)
+{
+    std::cerr << "Extra positional argument " << value << std::endl;
 }
 
 } // namespace Arguments
-} // namespace Cam
+
