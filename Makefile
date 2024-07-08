@@ -17,9 +17,6 @@ endif
 
 OPT = -O2
 
-CC = gcc
-CXX = g++
-
 INCS = \
 -IInc
 
