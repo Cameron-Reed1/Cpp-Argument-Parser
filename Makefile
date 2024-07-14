@@ -5,8 +5,10 @@ STATIC_TYPE = STATIC
 BUILD_DIR = bin
 SOURCE_DIR = Src
 HEADER_DIR = Inc
-HEADER_INSTALL_DIR = /usr/local/include
-INSTALL_DIR = /usr/local/lib
+
+INSTALL_PREFIX ?= /usr/local
+HEADER_INSTALL_DIR = $(INSTALL_PREFIX)/include
+INSTALL_DIR = $(INSTALL_PREFIX)/lib
 
 LIB_NAME = argParser
 ifeq ($(TYPE), $(SHARED_TYPE))
