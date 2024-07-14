@@ -45,59 +45,59 @@ all: $(BUILD_DIR)/$(LIB_FILE_NAME)
 
 ifneq ($(TYPE), $(SHARED_TYPE))
 shared: clean
-	@sed -i -e "s/^TYPE = .*$$/TYPE = $(SHARED_TYPE)/" Makefile
+    @sed -i -e "s/^TYPE = .*$$/TYPE = $(SHARED_TYPE)/" Makefile
 
 .PHONY: shared
 endif
 
 ifneq ($(TYPE), $(STATIC_TYPE))
 static: clean
-	@sed -i -e "s/^TYPE = .*$$/TYPE = $(STATIC_TYPE)/" Makefile
+    @sed -i -e "s/^TYPE = .*$$/TYPE = $(STATIC_TYPE)/" Makefile
 
 .PHONY: static
 endif
 
 $(BUILD_DIR)/$(LIB_FILE_NAME): $(OBJECTS)
 ifeq ($(TYPE), $(SHARED_TYPE))
-	$(CXX) $^ $(CXXFLAGS) -shared -o $@
+    $(CXX) $^ $(CXXFLAGS) -shared -o $@
 else
-	$(AR) $(ARFLAGS) $@ $^
+    $(AR) $(ARFLAGS) $@ $^
 endif
 
 $(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_DIR)
-	$(CC) -c $< $(CFLAGS) -o $@
+    $(CC) -c $< $(CFLAGS) -o $@
 
 $(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_DIR)
-	$(CXX) -c $< $(CXXFLAGS) -o $@
+    $(CXX) -c $< $(CXXFLAGS) -o $@
 
 $(BUILD_DIR):
-	mkdir -p $@
+    mkdir -p $@
 
 test: test.cpp all | $(BUILD_DIR)
-	$(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) $(TESTFLAGS) -o $(BUILD_DIR)/test
-	-$(BUILD_DIR)/test
+    $(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) $(TESTFLAGS) -o $(BUILD_DIR)/test
+    -$(BUILD_DIR)/test
 
 test_installed: test.cpp | $(BUILD_DIR)
-	$(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
-	-$(BUILD_DIR)/test
+    $(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
+    -$(BUILD_DIR)/test
 
 install: all
-	cp $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
-	cp $(HEADERS) $(HEADER_INSTALL_DIR)
-	@chmod 0755 $(INSTALL_DIR)/$(LIB_FILE_NAME)
+    cp $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
+    cp $(HEADERS) $(HEADER_INSTALL_DIR)
+    @chmod 0755 $(INSTALL_DIR)/$(LIB_FILE_NAME)
 ifeq ($(TYPE), $(SHARED_TYPE))
-	@ldconfig
+    @ldconfig
 endif
 
 uninstall:
-	$(RM) $(INSTALL_DIR)/$(LIB_FILE_NAME)
-	$(RM) $(addprefix $(HEADER_INSTALL_DIR)/, $(notdir $(HEADERS)))
+    $(RM) $(INSTALL_DIR)/$(LIB_FILE_NAME)
+    $(RM) $(addprefix $(HEADER_INSTALL_DIR)/, $(notdir $(HEADERS)))
 ifeq ($(TYPE), $(SHARED_TYPE))
-	@ldconfig
+    @ldconfig
 endif
 
 clean:
-	$(RM) -r $(BUILD_DIR)
+    $(RM) -r $(BUILD_DIR)
 
 .PHONY: all test install uninstall clean
 
