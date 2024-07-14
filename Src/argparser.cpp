@@ -51,12 +51,6 @@ Argument::Argument(char name)
     arguments.push_back(this);
 };
 
-Argument& Argument::description(const char* desc)
-{
-    m_Description = desc;
-    return *this;
-}
-
 Argument& Argument::alias(const char* alias)
 {
     m_Aliases.push_back(alias);
@@ -223,7 +217,7 @@ ERROR Bool::parseValue(Parser& state)
 
 
 PositionalArgument::PositionalArgument(bool required)
-    : found(false), required(required), m_Description(nullptr)
+    : found(false), required(required)
 {
     if (required) {
         for (PositionalArgument* arg: positionalArguments) {
@@ -236,12 +230,6 @@ PositionalArgument::PositionalArgument(bool required)
 
     positionalArguments.push_back(this);
 }
-
-void PositionalArgument::description(const char* desc)
-{
-    m_Description = desc;
-}
-
 
 PositionalInt::PositionalInt(int64_t defaultValue, bool required)
     : PositionalArgument(required), value(defaultValue) { }

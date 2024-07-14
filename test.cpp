@@ -5,13 +5,13 @@
 
 int main(int argc, char** argv) {
     Arguments::String first('f', "none");
-    first.description("First arg");
+    first.alias("first");
 
 	Arguments::Int second("second", 0);
-    second.description("Second arg").alias('s');
+    second.alias('s');
 
 	Arguments::Bool third("third");
-    third.description("Third arg").alias("abc").alias('t');
+    third.alias("abc").alias('t');
 
 	Arguments::PositionalString name("", true);
 	Arguments::PositionalInt age(0, false);

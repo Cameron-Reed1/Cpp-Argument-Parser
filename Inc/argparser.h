@@ -7,12 +7,14 @@ namespace Arguments
 
 enum ERROR {
 	NO_ERROR = 0,
+
 	ERROR_UNKNOWN_ARGUMENT,
 	ERROR_UNKNOWN_POSITIONAL_ARGUMENT,
+
 	ERROR_MISSING_VALUE,
 	ERROR_MISSING_POSITIONAL_ARGUMENT,
+
     ERROR_INVALID_INT,
-	SPECIAL_CASE_HELP,
 };
 
 class Parser
@@ -38,8 +40,6 @@ public:
     Argument(const char* name);
     Argument(char name);
 
-    Argument& description(const char* desc);
-
     Argument& alias(const char* alias);
     Argument& alias(char alias);
 
@@ -55,8 +55,6 @@ public:
 protected:
     const char* m_Name;
     char m_ShortName;
-
-    const char* m_Description;
 
 private:
     std::vector<const char*> m_Aliases;
@@ -112,16 +110,11 @@ class PositionalArgument
 public:
     PositionalArgument(bool required);
 
-    void description(const char* desc);
-
     virtual ERROR parseValue(Parser& state) = 0;
 
 public:
     bool found;
     bool required;
-
-private:
-    const char* m_Description;
 };
 
 
