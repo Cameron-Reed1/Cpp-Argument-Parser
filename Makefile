@@ -1,103 +1,156 @@
-TYPE = STATIC
-SHARED_TYPE = SHARED
-STATIC_TYPE = STATIC
+TYPE            := STATIC
+SHARED_TYPE     := SHARED
+STATIC_TYPE     := STATIC
 
-SOURCE_DIR = Src
-HEADER_DIR = Inc
-BUILD_DIR = bin
 
-INSTALL_PREFIX ?= /usr/local
-HEADER_INSTALL_DIR = $(INSTALL_PREFIX)/include
-INSTALL_DIR = $(INSTALL_PREFIX)/lib
+SRC_DIRS        := src
+INC_DIRS        := inc
 
-LIB_NAME = argParser
+
+BUILD_DIR       := build
+OFILE_DIR       := $(BUILD_DIR)/objects
+INSTALL_PREFIX  ?= /usr
+INC_INSTALL_DIR := $(INSTALL_PREFIX)/include
+LIB_INSTALL_DIR := $(INSTALL_PREFIX)/lib
+PC_INSTALL_DIR  := $(LIB_INSTALL_DIR)/pkgconfig
+
+
+
+LIB_NAME        := argParser
+PC_FILE         := $(LIB_NAME).pc
 ifeq ($(TYPE), $(SHARED_TYPE))
-LIB_FILE_NAME = lib$(LIB_NAME).so
+LIB_FILE_NAME   := lib$(LIB_NAME).so
 else
-LIB_FILE_NAME = lib$(LIB_NAME).a
+LIB_FILE_NAME   := lib$(LIB_NAME).a
 endif
 
-OPT = -O2
 
-INCS = -IInc
 
-C_SOURCES = $(wildcard $(SOURCE_DIR)/*.c)
-CXX_SOURCES = $(wildcard $(SOURCE_DIR)/*.cpp)
+INCLUDES        := $(addprefix -I, $(INC_DIRS))
+C_SOURCES       := $(foreach dir, $(SRC_DIRS), $(wildcard $(dir)/*.c))
+CXX_SOURCES     := $(foreach dir, $(SRC_DIRS), $(wildcard $(dir)/*.cpp))
+HEADERS         := $(foreach dir, $(INC_DIRS), $(wildcard $(dir)/*.h) $(wildcard $(dir)/*.hpp))
 
-OBJECTS = $(addprefix $(BUILD_DIR)/, $(notdir $(C_SOURCES:.c=.o)))
-OBJECTS += $(addprefix $(BUILD_DIR)/, $(notdir $(CXX_SOURCES:.cpp=.o)))
 
-CFLAGS = $(OPT) $(INCS) -Wall
-CXXFLAGS = -std=c++17 $(OPT) $(INCS) -Wall
+OFILES          := $(addprefix $(OFILE_DIR)/, $(notdir $(C_SOURCES:.c=.o) $(CXX_SOURCES:.cpp=.o)))
+
+
+OPT             := -O2
+CPPFLAGS        := $(INCLUDES) -MMD
+CFLAGS          := $(OPT) -std=c11 -Wall -Wextra -Wpedantic
+CXXFLAGS        := $(OPT) -std=c++17 -Wall -Wextra -Wpedantic
+LDFLAGS         := 
+LDLIBS          := 
+ARFLAGS         := rcs
+
+
+DEPENDS         := $(OFILES:.o=.d)
+
+
+DIRS            := $(BUILD_DIR) $(OFILE_DIR)
+
 
 ifeq ($(TYPE), $(SHARED_TYPE))
-CFLAGS += -fpic
-CXXFLAGS += -fpic
-
-TESTFLAGS = -Wl,-rpath=$(PWD)/$(BUILD_DIR)
+CFLAGS    += -fpic
+CXXFLAGS  += -fpic
+LDFLAGS   += -shared
+TESTFLAGS := -Wl,-rpath=$(PWD)/$(BUILD_DIR)
 endif
 
-HEADERS = $(wildcard $(HEADER_DIR)/*.h)
+ifeq ($(strip $(CXX_SOURCES)),)
+LD := $(CC)
+else
+LD := $(CXX)
+endif
 
-ARFLAGS = rvc
+
+define PKG_CONFIG
+prefix=$(INSTALL_PREFIX)
+exec_prefix=$${prefix}
+includedir=$${prefix}/include
+libdir=$${exec_prefix}/lib
+
+Name: $(LIB_NAME)
+Description: The argParser library
+Version: 2.0.0
+Cflags: -I$${includedir}
+Libs: -L$${libdir} -l$(LIB_NAME)
+endef
+
+
+.PHONY: all test install uninstall clean $(BUILD_DIR)/$(PC_FILE)
 
 all: $(BUILD_DIR)/$(LIB_FILE_NAME)
 
 ifneq ($(TYPE), $(SHARED_TYPE))
-shared: clean
-    @sed -i -e "s/^TYPE = .*$$/TYPE = $(SHARED_TYPE)/" Makefile
-
 .PHONY: shared
-endif
 
-ifneq ($(TYPE), $(STATIC_TYPE))
-static: clean
-    @sed -i -e "s/^TYPE = .*$$/TYPE = $(STATIC_TYPE)/" Makefile
-
-.PHONY: static
-endif
-
-$(BUILD_DIR)/$(LIB_FILE_NAME): $(OBJECTS)
-ifeq ($(TYPE), $(SHARED_TYPE))
-    $(CXX) $^ $(CXXFLAGS) -shared -o $@
+shared: clean
+	@sed -i -e "s/^TYPE\( \+\):= .*$$/TYPE\1:= $(SHARED_TYPE)/" Makefile
 else
-    $(AR) $(ARFLAGS) $@ $^
+.PHONY: static
+
+static: clean
+	@sed -i -e "s/^TYPE\( \+\):= .*$$/TYPE\1:= $(STATIC_TYPE)/" Makefile
 endif
 
-$(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.c | $(BUILD_DIR)
-    $(CC) -c $< $(CFLAGS) -o $@
-
-$(BUILD_DIR)/%.o: $(SOURCE_DIR)/%.cpp | $(BUILD_DIR)
-    $(CXX) -c $< $(CXXFLAGS) -o $@
-
-$(BUILD_DIR):
-    mkdir -p $@
-
-test: test.cpp all | $(BUILD_DIR)
-    $(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -L$(BUILD_DIR) $(TESTFLAGS) -o $(BUILD_DIR)/test
-    -$(BUILD_DIR)/test
-
-test_installed: test.cpp | $(BUILD_DIR)
-    $(CXX) $< $(CXXFLAGS) -l$(LIB_NAME) -o $(BUILD_DIR)/test
-    -$(BUILD_DIR)/test
-
-install: all
-    cp $(BUILD_DIR)/$(LIB_FILE_NAME) $(INSTALL_DIR)
-    cp $(HEADERS) $(HEADER_INSTALL_DIR)
-    @chmod 0755 $(INSTALL_DIR)/$(LIB_FILE_NAME)
+install: all $(BUILD_DIR)/$(PC_FILE)
+	install -D -m 0755 $(BUILD_DIR)/$(LIB_FILE_NAME) -t $(LIB_INSTALL_DIR)
+	install -D -m 0644 $(BUILD_DIR)/$(PC_FILE) -t $(PC_INSTALL_DIR)
+	install -D -m 0644 $(HEADERS) -t $(INC_INSTALL_DIR)
 ifeq ($(TYPE), $(SHARED_TYPE))
-    @ldconfig
+	@ldconfig
 endif
 
 uninstall:
-    $(RM) $(INSTALL_DIR)/$(LIB_FILE_NAME)
-    $(RM) $(addprefix $(HEADER_INSTALL_DIR)/, $(notdir $(HEADERS)))
+	$(RM) $(LIB_INSTALL_DIR)/$(LIB_FILE_NAME)
+	$(RM) $(PC_INSTALL_DIR)/$(PC_FILE)
+	$(RM) $(addprefix $(INC_INSTALL_DIR)/, $(notdir $(HEADERS)))
 ifeq ($(TYPE), $(SHARED_TYPE))
-    @ldconfig
+	@ldconfig
 endif
 
 clean:
-    $(RM) -r $(BUILD_DIR)
+	$(RM) -r $(DIRS)
 
-.PHONY: all test install uninstall clean
 
+-include $(DEPENDS)
+
+
+
+$(BUILD_DIR)/lib$(LIB_NAME).so: $(OFILES) | $(BUILD_DIR)
+	$(LD) $^ $(LDFLAGS) $(LDLIBS) -o $@
+
+$(BUILD_DIR)/lib$(LIB_NAME).a: $(OFILES) | $(BUILD_DIR)
+	$(AR) $(ARFLAGS) $@ $^
+
+$(BUILD_DIR)/$(PC_FILE): | $(BUILD_DIR)
+	$(file > $@,$(PKG_CONFIG))
+
+
+$(OFILE_DIR)/%.o: %.c | $(OFILE_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+$(OFILE_DIR)/%.o: %.cpp | $(OFILE_DIR)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+
+
+$(DIRS):
+	mkdir -p $@
+
+
+
+test: test.cpp all | $(BUILD_DIR)
+	$(CXX) $(INCLUDES) $(CXXFLAGS) $< -L$(BUILD_DIR) -l$(LIB_NAME) $(TESTFLAGS) -o $(BUILD_DIR)/test
+	-$(BUILD_DIR)/test
+
+test_installed: test.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $< -l$(LIB_NAME) -o $(BUILD_DIR)/test
+	-$(BUILD_DIR)/test
+
+
+
+
+vpath %.c $(SRC_DIRS)
+vpath %.cpp $(SRC_DIRS)
